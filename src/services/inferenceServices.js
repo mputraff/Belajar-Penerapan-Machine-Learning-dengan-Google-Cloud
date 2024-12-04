@@ -1,49 +1,43 @@
-require('dotenv').config();
+const tf = require("@tensorflow/tfjs-node");
 
+const InputError = require("../exceptions/InputError");
 
-const Hapi = require('@hapi/hapi');
-const routes = require('../server/routes');
-const loadModel = require('../services/loadModel');
-const InputError = require('../exceptions/InputError');
+async function predictClassification(model, image) {
+  try {
+    const tensor = tf.node
+      .decodeImage(image)
+      .resizeNearestNeighbor([224, 224])
+      .expandDims()
+      .toFloat();
 
+    const prediction = model.predict(tensor);
+    const score = await prediction.data();
+    const confidenceScore = Math.max(...score) * 100;
 
+    console.log("score: ", score);
+    console.log("confidenceScore: ", confidenceScore);
 
-(async () => {
-    const server = Hapi.server({
-        port: 3000,
-        host: '0.0.0.0',
-        routes: {
-            cors: {
-              origin: ['*'],
-            },
-        },
-    })
+    // Model akan mengembalikan array dengan rentang nilai 0 hingga 1. Di mana jika rentang nilainya di atas 50% diklasifikasikan sebagai Cancer, jika di bawah atau sama dengan 50% diklasifikasikan sebagai Non-cancer.
+    const label = confidenceScore > 50 ? "Cancer" : "Non-cancer";
 
-    const model = await loadModel();
-    server.app.model = model;
+    let suggestion;
 
-    server.route(routes);  // Akan dibahas lebih lanjut setelah pembahasan extension.
-    server.ext('onPreResponse', function (request, h) {
-        const response = request.response;
-        if (response instanceof InputError) {
-            const newResponse = h.response({
-                status: 'fail',
-                message: `${response.message}`
-            })
-            newResponse.code(response.statusCode)
-            return newResponse;
-        }
-        if (response.isBoom) {
-            const newResponse = h.response({
-                status: 'fail',
-                message: response.message
-            });
-            newResponse.code(response.output.statusCode);
-            return newResponse;
-        }
-        return h.continue;
-    });
- 
-    await server.start();
-    console.log(`Server start at: ${server.info.uri}`);
-})();
+    if (label === "Cancer") {
+      suggestion =
+        "Bersabar, jangan panik. Segera periksakan diri ke dokter untuk mendapatkan penanganan lebih lanjut.";
+    } else {
+      suggestion =
+        "Tetap jaga kesehatan dan pola hidup sehat. Jangan lupa untuk rutin periksa kesehatan.";
+    }
+
+    return {
+      confidenceScore,
+      label,
+      suggestion: suggestion,
+    };
+  } catch (error) {
+    throw new InputError(`Terjadi kesalahan dalam melakukan prediksi`);
+  }
+}
+
+module.exports = predictClassification;

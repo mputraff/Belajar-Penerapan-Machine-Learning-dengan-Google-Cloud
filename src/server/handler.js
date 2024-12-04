@@ -1,4 +1,4 @@
-const predictClassification = require("../services/InferenceService");
+const predictClassification = require("../services/inferenceServices");
 const crypto = require("crypto");
 const storeData = require("../services/storeData");
 
