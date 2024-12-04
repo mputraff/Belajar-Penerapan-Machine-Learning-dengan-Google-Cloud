@@ -1,5 +1,5 @@
-const { postPredictHandler, postPredictHistoriesHandler } = require('../server/handler.js');
- 
+const {postPredictHandler, predictHistories} = require('../server/handler');
+     
 const routes = [
   {
     path: '/predict',
@@ -7,16 +7,17 @@ const routes = [
     handler: postPredictHandler,
     options: {
       payload: {
+        maxBytes: 1000 * 1000,
         allow: 'multipart/form-data',
-        multipart: true,
-        maxBytes: 1000000
+        multipart: true
       }
     }
   },
   {
     path: '/predict/histories',
     method: 'GET',
-    handler: postPredictHistoriesHandler,
+    handler: predictHistories
+    
   }
 ]
  

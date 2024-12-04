@@ -1,33 +1,49 @@
-const tf = require('@tensorflow/tfjs-node');
-const InputError = require('../exceptions/InputError.js');
- 
-async function predictClassification(model, image) {
-    try {
-        const tensor = tf.node
-            .decodeJpeg(image)
-            .resizeNearestNeighbor([224, 224])
-            .expandDims()
-            .toFloat()
-  
-        const prediction = model.predict(tensor);
-        const score = await prediction.data();
-        const confidenceScore = Math.max(...score) * 100;
- 
-        const label = confidenceScore <= 50 ? 'Non-cancer' : 'Cancer'; 
-        let suggestion;
- 
-        if(label === 'Cancer') {
-            suggestion = "Segera periksa ke dokter!"
+require('dotenv').config();
+
+
+const Hapi = require('@hapi/hapi');
+const routes = require('../server/routes');
+const loadModel = require('../services/loadModel');
+const InputError = require('../exceptions/InputError');
+
+
+
+(async () => {
+    const server = Hapi.server({
+        port: 3000,
+        host: '0.0.0.0',
+        routes: {
+            cors: {
+              origin: ['*'],
+            },
+        },
+    })
+
+    const model = await loadModel();
+    server.app.model = model;
+
+    server.route(routes);  // Akan dibahas lebih lanjut setelah pembahasan extension.
+    server.ext('onPreResponse', function (request, h) {
+        const response = request.response;
+        if (response instanceof InputError) {
+            const newResponse = h.response({
+                status: 'fail',
+                message: `${response.message}`
+            })
+            newResponse.code(response.statusCode)
+            return newResponse;
         }
-        
-        if(label === 'Non-cancer') {
-            suggestion = "Anda sehat!"
+        if (response.isBoom) {
+            const newResponse = h.response({
+                status: 'fail',
+                message: response.message
+            });
+            newResponse.code(response.output.statusCode);
+            return newResponse;
         }
+        return h.continue;
+    });
  
-        return { label, suggestion };
-    } catch (error) {
-        throw new InputError('Terjadi kesalahan dalam melakukan prediksi')
-    }
-}
- 
-module.exports = predictClassification;
+    await server.start();
+    console.log(`Server start at: ${server.info.uri}`);
+})();
